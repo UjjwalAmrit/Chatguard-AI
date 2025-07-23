@@ -288,82 +288,72 @@ export default function VideoMeetComponent() {
                 setVideos((videos) => videos.filter((video) => video.socketId !== id))
             })
 
-            socketRef.current.on('user-joined', (id, clients) => {
-                clients.forEach((socketListId) => {
 
-                    connections[socketListId] = new RTCPeerConnection(peerConfigConnections)
-                    // Wait for their ice candidate       
-                    connections[socketListId].onicecandidate = function (event) {
+
+            socketRef.current.on('existing-peers', (peers) => {
+                peers.forEach(peerId => {
+                    const newConnection = new RTCPeerConnection(peerConfigConnections);
+                    connections[peerId] = newConnection;
+
+                    newConnection.onicecandidate = function (event) {
                         if (event.candidate != null) {
-                            socketRef.current.emit('signal', socketListId, JSON.stringify({ 'ice': event.candidate }))
-                        }
-                    }
-
-                    // Wait for their video stream
-                    connections[socketListId].onaddstream = (event) => {
-                        console.log("BEFORE:", videoRef.current);
-                        console.log("FINDING ID: ", socketListId);
-
-                        let videoExists = videoRef.current.find(video => video.socketId === socketListId);
-
-                        if (videoExists) {
-                            console.log("FOUND EXISTING");
-
-                            // Update the stream of the existing video
-                            setVideos(videos => {
-                                const updatedVideos = videos.map(video =>
-                                    video.socketId === socketListId ? { ...video, stream: event.stream } : video
-                                );
-                                videoRef.current = updatedVideos;
-                                return updatedVideos;
-                            });
-                        } else {
-                            // Create a new video
-                            console.log("CREATING NEW");
-                            let newVideo = {
-                                socketId: socketListId,
-                                stream: event.stream,
-                                autoplay: true,
-                                playsinline: true
-                            };
-
-                            setVideos(videos => {
-                                const updatedVideos = [...videos, newVideo];
-                                videoRef.current = updatedVideos;
-                                return updatedVideos;
-                            });
+                            socketRef.current.emit('signal', peerId, JSON.stringify({ 'ice': event.candidate }));
                         }
                     };
 
+                    newConnection.onaddstream = (event) => {
+                        let newVideo = {
+                            socketId: peerId,
+                            stream: event.stream,
+                            autoplay: true,
+                            playsinline: true
+                        };
+                        setVideos(prev => prev.some(v => v.socketId === peerId) ? prev : [...prev, newVideo]);
+                    };
 
-                    // Add the local video stream
-                    if (window.localStream !== undefined && window.localStream !== null) {
-                        connections[socketListId].addStream(window.localStream)
-                    } else {
-                        let blackSilence = (...args) => new MediaStream([black(...args), silence()])
-                        window.localStream = blackSilence()
-                        connections[socketListId].addStream(window.localStream)
+                    if (window.localStream) {
+                        newConnection.addStream(window.localStream);
                     }
-                })
+                });
+            });
 
-                if (id === socketIdRef.current) {
-                    for (let id2 in connections) {
-                        if (id2 === socketIdRef.current) continue
+            socketRef.current.on('user-joined', (id) => {
+                const newConnection = new RTCPeerConnection(peerConfigConnections);
+                connections[id] = newConnection;
 
-                        try {
-                            connections[id2].addStream(window.localStream)
-                        } catch (e) { }
-
-                        connections[id2].createOffer().then((description) => {
-                            connections[id2].setLocalDescription(description)
-                                .then(() => {
-                                    socketRef.current.emit('signal', id2, JSON.stringify({ 'sdp': connections[id2].localDescription }))
-                                })
-                                .catch(e => console.log(e))
-                        })
+                newConnection.onicecandidate = function (event) {
+                    if (event.candidate != null) {
+                        socketRef.current.emit('signal', id, JSON.stringify({ 'ice': event.candidate }));
                     }
+                };
+
+                newConnection.onaddstream = (event) => {
+                    let newVideo = {
+                        socketId: id,
+                        stream: event.stream,
+                        autoplay: true,
+                        playsinline: true
+                    };
+
+                    setVideos((prevVideos) => {
+                        if (prevVideos.some(video => video.socketId === id)) {
+                            return prevVideos;
+                        }
+                        return [...prevVideos, newVideo];
+                    });
+                };
+
+                if (window.localStream) {
+                    newConnection.addStream(window.localStream);
                 }
-            })
+                
+                newConnection.createOffer()
+                    .then(offer => newConnection.setLocalDescription(offer))
+                    .then(() => {
+                        socketRef.current.emit('signal', id, JSON.stringify({ 'sdp': newConnection.localDescription }));
+                    })
+                    .catch(e => console.log(e));
+            });
         })
     }
 
@@ -419,12 +409,12 @@ export default function VideoMeetComponent() {
         setMessage(e.target.value);
     }
 
-    const addMessage = (data, sender, socketIdSender) => {
+    const addMessage = (payload) => {
         setMessages((prevMessages) => [
             ...prevMessages,
-            { sender: sender, data: data }
+            payload
         ]);
-        if (socketIdSender !== socketIdRef.current) {
+        if (payload['socket-id-sender'] !== socketIdRef.current) {
             setNewMessages((prevNewMessages) => prevNewMessages + 1);
         }
     };
@@ -433,7 +423,7 @@ export default function VideoMeetComponent() {
 
     let sendMessage = () => {
         console.log(socketRef.current);
-        socketRef.current.emit('chat-message', message, username)
+        socketRef.current.emit('chat-message',{ data: message, sender: username });
         setMessage("");
 
         // this.setState({ message: "", sender: username })
@@ -474,19 +464,17 @@ export default function VideoMeetComponent() {
                             <h1>Chat</h1>
 
                             <div className={styles.chattingDisplay}>
-
                                 {messages.length !== 0 ? messages.map((item, index) => {
-
-                                    console.log(messages)
                                     return (
                                         <div style={{ marginBottom: "20px" }} key={index}>
                                             <p style={{ fontWeight: "bold" }}>{item.sender}</p>
-                                            <p>{item.data}</p>
+                                            {/* Apply a blur filter if the message is toxic */}
+                                            <p style={item.blurred ? { filter: 'blur(5px)' } : {}}>
+                                                {item.data}
+                                            </p>
                                         </div>
                                     )
                                 }) : <p>No Messages Yet</p>}
-
-
                             </div>
 
                             <div className={styles.chattingArea}>

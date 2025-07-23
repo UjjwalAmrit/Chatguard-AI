@@ -6,16 +6,27 @@ export default function LandingPage() {
 
     const router = useNavigate();
 
+     const generateRandomRoomId = () => {
+    
+        return Math.random().toString(36).substring(2, 8);
+    }
+
+    const handleJoinAsGuest = () => {
+    
+        const roomId = generateRandomRoomId();
+
+        router(`/${roomId}`);
+    }
+
     return (
         <div className='landingPageContainer'>
             <nav>
                 <div className='navHeader'>
-                    <h2>Apna Video Call</h2>
+                    <h2>ChatGuard AI</h2>
                 </div>
                 <div className='navlist'>
-                    <p onClick={() => {
-                        router("/aljk23")
-                    }}>Join as Guest</p>
+                    <p onClick={handleJoinAsGuest}>Join as Guest</p>
+                        
                     <p onClick={() => {
                         router("/auth")
 
@@ -32,9 +43,9 @@ export default function LandingPage() {
 
             <div className="landingMainContainer">
                 <div>
-                    <h1><span style={{ color: "#FF9839" }}>Connect</span> with your loved Ones</h1>
+                    <h1><span style={{ color: "#FF9839" }}>Shielding </span> Conversations. Empowering Respect.</h1>
 
-                    <p>Cover a distance by Apna Video Call</p>
+                    <p>Not just messages — we filter hate.</p>
                     <div role='button'>
                         <Link to={"/auth"}>Get Started</Link>
                     </div>
