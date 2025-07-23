@@ -1,0 +1,20 @@
+# Node.js
+node_modules/
+.env
+dist/
+build/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dll
+machine_learning/venv/
+.env/
+*.egg-info/
+
+# VSCode
+.vscode/
