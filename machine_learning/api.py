@@ -1,54 +1,58 @@
-# machine_learning/api.py
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
+import numpy as np
 
-# Initialize Flask app
 app = Flask(__name__)
-CORS(app) # Enable Cross-Origin Resource Sharing
+CORS(app)
 
-# --- Load models ONCE at startup ---
 try:
     model = joblib.load('model.pkl')
     vectorizer = joblib.load('tfidf.pkl')
     print("✅ Models loaded successfully!")
+except FileNotFoundError:
+    print("🔴 Error: model.pkl or tfidf.pkl not found. Make sure the files are in the same directory.")
+    model = None
+    vectorizer = None
 except Exception as e:
-    print(f"🔴 Error loading models: {e}")
+    print(f"🔴 An error occurred while loading models: {e}")
     model = None
     vectorizer = None
 
-# --- Define the prediction endpoint ---
 @app.route('/predict', methods=['POST'])
 def predict():
     if not model or not vectorizer:
-        return jsonify({'error': 'Models are not loaded'}), 500
+        return jsonify({'error': 'Models are not loaded or failed to load. Check server logs.'}), 500
 
-    # Get the comment from the request JSON
     json_data = request.get_json()
     if not json_data or 'comment' not in json_data:
-        return jsonify({'error': 'Missing "comment" in request body'}), 400
+        return jsonify({'error': 'Request body must be JSON and contain a "comment" field.'}), 400
 
-    comment = json_data['comment']
+    comment_text = json_data['comment']
+    
+    print(f"\nReceived comment: '{comment_text}'")
 
-    # Vectorize the input and make a prediction
-    vectorized_comment = vectorizer.transform([comment])
-    prediction = model.predict(vectorized_comment)
-    probabilities = model.predict_proba(vectorized_comment)
+    try:
+        vectorized_comment = vectorizer.transform([comment_text])
+        prediction = model.predict(vectorized_comment)
+        prediction_values = prediction[0]
 
-    # Create a JSON response
-    labels = {
-        'toxic': bool(prediction[0][0]),
-        'severe_toxic': bool(prediction[0][1]),
-        'obscene': bool(prediction[0][2]),
-        'threat': bool(prediction[0][3]),
-        'insult': bool(prediction[0][4]),
-        'identity_hate': bool(prediction[0][5])
-    }
+        labels = {
+            'toxic': bool(prediction_values[0]),
+            'severe_toxic': bool(prediction_values[1]),
+            'obscene': bool(prediction_values[2]),
+            'threat': bool(prediction_values[3]),
+            'insult': bool(prediction_values[4]),
+            'identity_hate': bool(prediction_values[5])
+        }
 
-    return jsonify(labels)
+        print(f"Prediction result: {labels}")
 
-# --- Run the Flask app ---
+        return jsonify(labels)
+
+    except Exception as e:
+        print(f"🔴 An error occurred during prediction: {e}")
+        return jsonify({'error': 'Failed to make a prediction.'}), 500
+
 if __name__ == '__main__':
-    # Use port 5000 by convention for development APIs
-    app.run(host="0.0.0.0", port=80,debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=True)

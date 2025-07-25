@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config({path : '../.env'});
+
 import express from "express";
 
 
@@ -24,8 +27,8 @@ app.use(express.urlencoded({ limit: "40kb", extended: true }));
 app.use("/api/v1/users", userRoutes);
 
 const start = async () => {
-    app.set("mongo_user")
-    const connectionDb = await mongoose.connect("mongodb+srv://imdigitalashish:imdigitalashish@cluster0.cujabk4.mongodb.net/")
+    const MONGO_URI = process.env.MONGO_URI;
+    const connectionDb = await mongoose.connect(MONGO_URI)
 
     console.log(`MONGO Connected DB HOst: ${connectionDb.connection.host}`)
     server.listen(app.get("port"), () => {
