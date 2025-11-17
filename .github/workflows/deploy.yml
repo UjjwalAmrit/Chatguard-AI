@@ -1,0 +1,59 @@
+# Name of your workflow
+name: Deploy to AWS EC2
+
+# 1. Trigger
+# This workflow runs when you push to the 'main' branch
+on:
+  push:
+    branches:
+      - main  # Change this to 'master' if that's your main branch
+
+# 2. Jobs
+# This is the list of tasks to do
+jobs:
+  deploy:
+    # Use a standard GitHub-hosted virtual machine
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Log into your EC2 server
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # Get the secrets we saved in GitHub
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          
+          # Step 2: Run all the deployment commands on your server
+          # This is the same manual process we just did
+          script: |
+            # Go to your project directory
+            cd /home/ubuntu/Zoom
+
+            # Pull the new code
+            echo "Pulling latest code..."
+            git pull
+
+            # --- 1. Deploy Frontend ---
+            echo "Building frontend..."
+            cd /home/ubuntu/Zoom/frontend
+            npm install
+            npm run build
+            sudo chown -R www-data:www-data /home/ubuntu/Zoom/frontend/build
+            sudo systemctl restart nginx
+            
+            # --- 2. Deploy Backend ---
+            echo "Deploying backend..."
+            cd /home/ubuntu/Zoom/backend
+            npm install
+            pm2 restart chatguardai --update-env
+            
+            # --- 3. Deploy ML Service ---
+            echo "Deploying ML service..."
+            cd /home/ubuntu/Zoom/machine_learning
+            source venv/bin/activate
+            pip install -r requirements.txt
+            pm2 restart ml_service
+
+            echo "🚀 Deployment complete!"
